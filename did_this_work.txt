@@ -1,1 +1,2 @@
 Will adding 1 arrows after the echo append it on to the end or will it replace what I had written before?
+Okay, adding one arrow replaced my entire text with what I wrote afterwards, but will writing with two arrows after make it so that I can just append it on?
