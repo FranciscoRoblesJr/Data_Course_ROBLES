@@ -1,0 +1,1 @@
+ I want to see if this adds text to my txt file as well as if adding a space a the first part of the echo adds a space in the data file
