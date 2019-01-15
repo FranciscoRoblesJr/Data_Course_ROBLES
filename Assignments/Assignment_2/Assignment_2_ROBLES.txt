@@ -1,0 +1,23 @@
+1
+$ cd ../../Data/data-shell/data/pdb/
+$ wc -l m*
+2
+$ mkdir ../../../../../Data_Course_ROBLES/Assignments
+$ mkdir ../../../../../Data_Course_ROBLES/Assignments/Assignment_2
+$ wc -l m* >> ../../../../../Data_Course_ROBLES/Assignments/Assignment_2/m_lines.txt
+3
+$ cd ..
+$ cut animals.txt -f 2 -d ',' | sort -u >> ../../../../Data_Course_ROBLES/Assignments/Assignment_2/unique_animals.txt
+4
+$ cd ../..
+$ cut BioLog_Plate_Data.csv -f 5 -d ',' | sort -u >> ../../Data_Course_ROBLES/Assignments/Assignment_2/unique_C-substrates.txt
+5
+$ cd data-shell/data/
+$ wc -l * | sort | tail -2 | head -1
+6
+$ cd ../many_files/
+$ find * -type f -exec bash ../scripts/sum_lines.sh {} \; >> ../../../../Data_Course_ROBLES/Assignments/Assignment_2/file_sums.txt
+
+
+
+
