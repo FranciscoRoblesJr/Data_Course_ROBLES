@@ -1,0 +1,21 @@
+1
+Other things that read.csv does is that it automatically sorts these 
+variables into their own class type. Like if one of them has a string 
+of letters, it will automatically classify it into a factor, unless 
+you put an argument into the function that tells it to keep it as a 
+string. There are many things like this that read.csv automatically does.
+2
+read.csv2 is different in the fact that it seperates based on periods 
+instead of commas.
+3
+read.csv2 exists because some countries uses commas isntead of periods 
+to distinguish their decimals and use periods instead of commas to seperate 
+their values.
+4
+You could put the argument into your read.csv and put stringsAsFactors = F
+5
+summary(df$Home.Value)
+6
+"Home.Value"
+7
+It is coloring each of your points based on the factor level of region.
