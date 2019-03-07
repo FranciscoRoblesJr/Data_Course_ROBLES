@@ -1,0 +1,49 @@
+
+Call:
+glm(formula = Diversity ~ Precip, data = df)
+
+Deviance Residuals: 
+    Min       1Q   Median       3Q      Max  
+-513.35  -114.48   -46.87    85.67   991.32  
+
+Coefficients:
+            Estimate Std. Error t value Pr(>|t|)    
+(Intercept)  101.109     17.951   5.633 4.13e-08 ***
+Precip       215.317      4.003  53.789  < 2e-16 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+(Dispersion parameter for gaussian family taken to be 44305.84)
+
+    Null deviance: 141302267  on 297  degrees of freedom
+Residual deviance:  13114528  on 296  degrees of freedom
+AIC: 4037.9
+
+Number of Fisher Scoring iterations: 2
+
+
+Call:
+glm(formula = Diversity ~ Precip + Aerosol_Density + CO2_Concentration, 
+    data = df)
+
+Deviance Residuals: 
+    Min       1Q   Median       3Q      Max  
+-470.05   -98.06    -1.72    94.98   805.82  
+
+Coefficients:
+                    Estimate Std. Error t value Pr(>|t|)    
+(Intercept)       -7374.8295   618.0739  -11.93   <2e-16 ***
+Precip              153.6672     5.6621   27.14   <2e-16 ***
+Aerosol_Density       1.2235     0.1003   12.20   <2e-16 ***
+CO2_Concentration    19.2250     1.6049   11.98   <2e-16 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+(Dispersion parameter for gaussian family taken to be 28016.38)
+
+    Null deviance: 141302267  on 297  degrees of freedom
+Residual deviance:   8236816  on 294  degrees of freedom
+AIC: 3903.3
+
+Number of Fisher Scoring iterations: 2
+
