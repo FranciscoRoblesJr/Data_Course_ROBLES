@@ -1,0 +1,18 @@
+Not sure where to answer the questions so I'm just answering them here:
+
+1. The LDS religion has the strongest correlation between non-religious people and the religion. The R^2 value 
+is .7565 which means that the correlation that it has is the square root of that number, which is about -0.87 
+(negative since it has a negative relationship)
+
+2. That correlation is negative since the more non-religious proportion there is, the less LDS proportion 
+there is.
+
+3. Episcopal has the second largest one. Their R^2 value is .3557, which means they have about a .60 correlation.
+
+4. It has a positive relationship since the more non religious proportion there is, the higher the proportion 
+of Episcopal.
+
+5. The Episcopal may not be a linear relationship, it looks a little more exponential but it may just appear 
+that way with this smaller data set. It may honestly just be that the one extremely positive outlier makes it 
+seem that way. The LDS church seems to be pretty linear and pretty strong, which makes sense given the known 
+demographics of Utah.
