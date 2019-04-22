@@ -1,0 +1,7 @@
+1
+My AOV model seemd to be the better one and neither of the two variables that I chose were not 
+significant since their P-value was essentially zero.
+2
+Nitrogen did not appear to be linear. One of the first links you get when typing 'How to deal with 
+non-linear relationships in R' is from r-bloggers, which is one of my go-to pages when I don't know 
+how to do something.
