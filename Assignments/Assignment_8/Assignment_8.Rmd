@@ -1,0 +1,232 @@
+---
+title: "Assignment 8"
+author: "Francisco Robles"
+date: "April 24, 2019"
+output: html_document
+---
+
+The first thing I'll need to do is load in some essential packages
+```{r message=FALSE}
+library(tidyverse)
+df = read_csv('../../../Data_Course/Data/GradSchool_Admissions.csv')
+```
+
+
+
+Let's take a quick look at our data before we start.
+```{r echo=FALSE}
+glimpse(df)
+```
+This appears to be a good data set to use Logistic Regression for. We can use GRE Score, GPA, and the rank of the undergraduate institution to try and predict whether these students got admitted to grad school or not.
+
+
+
+
+Lets try and see if we can visualize this data well.
+```{r}
+ggplot(df, aes(gpa, admit, color = factor(rank), size = gre)) +
+  geom_jitter(width = 0, height = .1) +
+  scale_size_continuous(range = c(1,3), guide = 'none') +
+  labs(x = 'GPA', y = 'Admitted?', color = 'School Tier',
+       title = 'Grad School Admission vs. GPA by School Tier')
+ggplot(df, aes(gre, admit, color = factor(rank), size = gpa)) +
+  geom_jitter(width = 0, height = .1) +
+  scale_size_continuous(range = c(1,3), guide = 'none') +
+  labs(x = 'GRE Score', y = 'Admitted?', color = 'School Tier',
+       title = 'Grad School Admission vs. GRE Score by School Tier')
+```
+
+This data has the setup of a Logistic Regression problem. It's tough to see just visually how the different variables effect whether you get into grad school or not. We can run the model to test this though.
+
+
+
+
+I have written a function in one of my other Stats courses to perform a Logistic Regression and have additional feedback on the data.
+```{r include=FALSE}
+fun.LogReg = function(data, group, vars, cut.off){
+  require(tidyverse)
+  # Splitting variables vector
+  vars.plus = NULL
+  for(i in 1:length(vars)){
+    vars.plus = paste(vars.plus, vars[i], sep = '+')
+  }
+  vars.plus = substr(vars.plus, 2, nchar(vars.plus))
+  
+  # Creating formula variable
+  formula = paste0(group, rawToChar(as.raw(126)), vars.plus)
+  
+  # Full summary of data
+  full.mod = glm(formula, data = data, family = binomial(link = 'logit'))
+  full.summ = summary(full.mod)
+  conc = survival::concordance(full.mod)
+  
+  # Leave one out model
+  pred = NULL
+  results = NULL
+  for(i in 1:nrow(data)){
+    test = data[i,]
+    train = data[-i,]
+    train.mod = glm(formula, data = train, family = binomial(link = 'logit'))
+    pred[i] = predict(train.mod, type = 'response', newdata = test)
+  }
+  results = ifelse(pred > cut.off, 1, 0)
+  
+  # Sensitivity and everything
+  fication = table(pull(data, group), ifelse(pred > cut.off, 1, 0))
+  rownames(fication) = c('No', 'Yes')
+  colnames(fication) = c('Pred No', 'Pred Yes')
+  
+  acc = (fication[1] + fication[4]) / nrow(data)
+  sens = fication[4] / (fication[2] + fication[4])
+  specif = fication[1] / (fication[1] + fication[3])
+  
+  chisq.stat = full.summ$null.deviance - full.summ$deviance
+  chisq.p = pchisq(chisq.stat, 1)
+  aic.val = full.summ$aic
+  conc.val = conc$concordance
+  comb = c(Chi.Sq.Value = chisq.stat, Chi.Sq.P = chisq.p, AIC = aic.val, Concordance = conc.val, 
+           Accuracy = acc, Sensitivity = sens, Specificity = specif)
+  
+  # ROC Curve
+  test.cut = seq(0,1,.01)
+  test.diag = matrix(NA, 101, 5)
+  for(i in 1:101){
+    test.tab = table(pull(data, group), ifelse(pred > test.cut[i], 1, 0))
+    test.acc = (test.tab[1] + test.tab[4]) / nrow(data)
+    test.sens = test.tab[4] / (test.tab[2] + test.tab[4])
+    test.specif = test.tab[1] / (test.tab[1] + test.tab[3])
+    test.add = test.sens + test.specif
+    test.comb = c(test.cut[i], test.acc, test.sens, test.specif, test.add)
+    test.diag[i,] = test.comb
+  }
+  test.diag = as.data.frame(test.diag)
+  colnames(test.diag) = c('Cut_Off', 'Accuracy', 'Sensitivity', 'Specificity', 'Sens + Specif')
+  
+  line.seg = test.diag %>%
+    group_by(Specificity)%>%
+    summarize(y_val = min(Sensitivity))  %>%
+    mutate(x_val = 1 - Specificity) %>%
+    select(x_val, y_val) %>%
+    arrange(x_val) %>%
+    slice(-n())
+  line.seg = cbind.data.frame(line.seg, line.seg$x_val, c(line.seg$y_val[2:nrow(line.seg)], 1), 
+                              c(line.seg$x_val[2:nrow(line.seg)], 1))
+  colnames(line.seg) = c('x_start', 'y_start', 'x_end', 'y_end', 'x_end_two')
+  
+  ROC = ggplot(test.diag, aes(1 - Specificity, Sensitivity)) +
+    geom_point()
+  for(i in 1:(nrow(line.seg) - 1)){
+    ROC = ROC +
+      geom_segment(aes(x = x_start, y = y_start, xend = x_end, yend = y_end), data = line.seg) +
+      geom_segment(aes(x = x_start, y = y_end, xend = x_end_two, yend = y_end), data = line.seg)
+  }
+  ROC = ROC +
+    geom_abline(aes(intercept = 0, slope = 1, color = 'red')) +
+    geom_segment(aes(x = 0, y = 0, xend = 0, yend = line.seg[1,2])) +
+    labs(title = 'ROC Curve') +
+    theme(plot.title = element_text(size = 20, face = 'bold', hjust = 0.5),
+          legend.position = 'none')
+  
+  # return list
+  Model.list = list()
+  Model.list[['Model']] = full.mod
+  Model.list[['Summary']] = full.summ
+  Model.list[['Concordance']] = conc
+  Model.list[['Probability']] = full.mod$fitted
+  
+  loo.list = list()
+  loo.list[['Probability']] = pred
+  loo.list[['Predicted_Group']] = results
+  class.list = list()
+  class.list[['Table']] = fication
+  class.list[['Diagnostic']] = comb
+  class.list[['Full_Diagnostic']] = test.diag
+  loo.list[['Classification']] = class.list
+  
+  plots.list = list()
+  plots.list[['ROC']] = ROC
+  scatter.resub.list = list()
+  scatter.loo.list = list()
+  data = cbind.data.frame(data, Pred.resub = full.mod$fitted)
+  for(i in vars){
+    scatter.resub.list[[i]] = ggplot(data, aes_string(i, 'Pred.resub')) +
+      geom_point()
+  }
+  data = cbind.data.frame(data, Pred.loo = pred)
+  for(i in vars){
+    scatter.loo.list[[i]] = ggplot(data, aes_string(i, 'Pred.loo')) +
+      geom_point()
+  }
+  plots.list[['Scatter_Resub']] = scatter.resub.list
+  plots.list[['Scatter_LOO']] = scatter.loo.list
+  plots.list[['Data_for_Plots']] = data
+  
+  full.list = list()
+  full.list[['Model']] = Model.list
+  full.list[['LOO']] = loo.list
+  full.list[['Plots']] = plots.list
+  
+  
+  return(full.list)
+}
+```
+```{r}
+grad_mod = fun.LogReg(df, 'admit', c('gre', 'gpa', 'rank'), .5)
+```
+
+
+
+Lets analyze how well this exact model performed.
+```{r warning=FALSE}
+grad_mod$Plots$ROC
+```
+
+With the ROC plot, you are looking for the point where there is a top to a somewhat vertical stretch. This point appears to be around the point of .64 Sensitivity and .65 for Specificity
+
+```{r}
+grad_mod$LOO$Classification$Full_Diagnostic
+```
+Those two values correspond to a cutoff which should be at .33 instead of the .5 which we used at first. Using a cutoff of .33 means that if a student has a probability of greater than .33, we will predict that he is going to be admitted to grad school. This may seem a little weird and that we should just keep it at .5, but you actually get better and more accurate results if you determine a better fit cutoff point.
+
+
+
+So, let's re-run our model with having .33 as the cutoff this time.
+```{r echo = FALSE}
+grad_mod2 = fun.LogReg(df, 'admit', c('gre', 'gpa', 'rank'), .33)
+```
+
+
+Let's take a look at how accurate our new model is
+```{r}
+grad_mod2$LOO$Classification$Table
+```
+This table gives us that our Accuracy (how often we predict correctly) is 64.25%, our Sensitivity (how often we can predict the people that did make it into grad school) is 64.56%, and our Specificity (how often we can predict the people that did not make it into grad school) is 64.1%.
+
+
+
+Now that we have determined our model works relatively well (it's better than a 50/50 guess), lets look at our model summary and see what it is telling us.
+```{r echo = FALSE}
+grad_mod2$Model$Summary
+```
+This model is a linear model of the log odds of each of the variables, but in a nutshell we can somewhat think about this how we would normally a linear regression summary. The P-Values of all the variables tell us that each of the data points are significant, which means that each of them matter in trying to predict grad school admisssions. For the 'gre' and 'gpa' variables, since their coefficients are postive, it means that they are more likely to get admitted with the higher values there, which seems pretty reasonable. The rank variable tells us that, since it is a negative, that you are less likely to get in to a school if your school you got your undergrad in is a lower tiered school. The estimate being very negative means that there are more people who don't get in to grad school than people that get in.
+
+
+
+We can also see how this works with a couple of examples. The first example we will look at is the worst case scenario for getting in. I will use getting a GRE score of 220 and a GPA of 2.26, since those were the minimums from our data, and have them come from a very low tier school.
+```{r}
+worst.odds = exp(grad_mod2$Model$Model$coefficients%*%c(1, 220, 2.26, 4))
+worst.prob = worst.odds / (1 + worst.odds)
+worst.prob
+```
+This means that the lowest probability that this model will give us (with still using observations with our data), is a 3% chance of getting in. Not too good.
+
+The best case scenario would be getting a GRE score of 800, a GPA of 4.0 , and coming from a very high tier school.
+```{r}
+best.odds = exp(grad_mod2$Model$Model$coefficients%*%c(1, 800, 4, 1))
+best.prob = best.odds / (1 + best.odds)
+best.prob
+```
+This means that the best that this model can predict is that you have a 72% of getting admitted to grad school. I'd expect with perfect GRE and GPA from a great school would let you have a better shot, but I guess not.
+
+
+
