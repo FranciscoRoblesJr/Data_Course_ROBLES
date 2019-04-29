@@ -1,29 +1,31 @@
 ---
-title: "Assignment 8"
+title: "Final Project"
 author: "Francisco Robles"
-date: "April 24, 2019"
-output: html_document
+date: "April 27, 2019"
+output:
+  pdf_document: default
+  html_document: default
 ---
 
-The first thing I'll need to do is load in some essential packages
-```{r message=FALSE}
+The topic dataset that I chose was a Grad School Admissions data set that had each student's GRE Score, their college GPA, and the School Tier that they went to (1 being the best and 4 being the worse). The data was collected from 400 students. I'm not sure how the data was collected, as I had this data set from a previous class that I found and it was just given to us. The question that I want to answer is can we use someone's GRE Score, GPA, and School Tier to predict whether or not they got accepted into grad school. I will be using a logistic regression model to see if we can come up with a way to try and precit the admission to grad school or not.
+```{r include=FALSE}
 library(tidyverse)
 df = read_csv('../../../Data_Course/Data/GradSchool_Admissions.csv')
 ```
 
 
 
-Let's take a quick look at our data before we start.
-```{r echo=FALSE}
+
+```{r eval=FALSE, include=FALSE}
 glimpse(df)
 ```
-This appears to be a good data set to use Logistic Regression for. We can use GRE Score, GPA, and the rank of the undergraduate institution to try and predict whether these students got admitted to grad school or not.
 
 
 
 
 Lets try and see if we can visualize this data well.
-```{r}
+
+```{r echo=FALSE}
 ggplot(df, aes(gpa, admit, color = factor(rank), size = gre)) +
   geom_jitter(width = 0, height = .1) +
   scale_size_continuous(range = c(1,3), guide = 'none') +
@@ -36,12 +38,12 @@ ggplot(df, aes(gre, admit, color = factor(rank), size = gpa)) +
        title = 'Grad School Admission vs. GRE Score by School Tier')
 ```
 
-This data has the setup of a Logistic Regression problem. It's tough to see just visually how the different variables effect whether you get into grad school or not. We can run the model to test this though.
+It's tough to see just visually how the different variables effect whether you get into grad school or not. What would be the best is if we can see almost a clear point where they went from not being accepted (0 for admit) to being admitted (1 for admit). It does just seem to show that the higher GRE and higher GPA seem to have a better chance at getting in, which makes sense.
 
 
 
 
-I have written a function in one of my other Stats courses to perform a Logistic Regression and have additional feedback on the data.
+
 ```{r include=FALSE}
 fun.LogReg = function(data, group, vars, cut.off){
   require(tidyverse)
@@ -170,63 +172,65 @@ fun.LogReg = function(data, group, vars, cut.off){
   return(full.list)
 }
 ```
-```{r}
-grad_mod = fun.LogReg(df, 'admit', c('gre', 'gpa', 'rank'), .5)
-```
-
-
-
-Lets analyze how well this exact model performed.
+Lets run our first model and see how well it does
 ```{r warning=FALSE}
+grad_mod = fun.LogReg(df, 'admit', c('gre', 'gpa', 'rank'), .5)
 grad_mod$Plots$ROC
 ```
 
-With the ROC plot, you are looking for the point where there is a top to a somewhat vertical stretch. This point appears to be around the point of .64 Sensitivity and .65 for Specificity
+So for an ROC plot, we are looking for a place where we can see a long vertical line, and we want to choose the point at the top of that vertical line. This one isn't super clear, but the point we want to choose is where the point is at .64 Sensitivity and .65 for Specificity. The .64 Sensitivity tells us that we can identify the people who did get into grad school 64% of the time, and the .65 for Specificity tells us that we can identify the people that got rejected from grad school 65% of the time. This is better than the 50/50 of us just randomly guessing.
 
-```{r}
+```{r eval=FALSE, include=FALSE}
 grad_mod$LOO$Classification$Full_Diagnostic
 ```
-Those two values correspond to a cutoff which should be at .33 instead of the .5 which we used at first. Using a cutoff of .33 means that if a student has a probability of greater than .33, we will predict that he is going to be admitted to grad school. This may seem a little weird and that we should just keep it at .5, but you actually get better and more accurate results if you determine a better fit cutoff point.
+We are then going to use that point that we just identified to come up with a cut-off point for our probability. It may seem like you would just say if our model says that you have a 50% chance of gettting in to grad school, we will predict that you do, but that isn't always the best case. That point actually corresponds to a cut-off of .33, meaning that if our model predicts you have over a 33% chance of being admitted to grad school, we will predict that you do make it in.
 
 
 
-So, let's re-run our model with having .33 as the cutoff this time.
-```{r echo = FALSE}
+
+
+```{r}
 grad_mod2 = fun.LogReg(df, 'admit', c('gre', 'gpa', 'rank'), .33)
 ```
+This model is now using the .33 cut-off. Lets see how our model ended up turning out
 
-
-Let's take a look at how accurate our new model is
-```{r}
-grad_mod2$LOO$Classification$Table
-```
-This table gives us that our Accuracy (how often we predict correctly) is 64.25%, our Sensitivity (how often we can predict the people that did make it into grad school) is 64.56%, and our Specificity (how often we can predict the people that did not make it into grad school) is 64.1%.
-
-
-
-Now that we have determined our model works relatively well (it's better than a 50/50 guess), lets look at our model summary and see what it is telling us.
 ```{r echo = FALSE}
 grad_mod2$Model$Summary
 ```
-This model is a linear model of the log odds of each of the variables, but in a nutshell we can somewhat think about this how we would normally a linear regression summary. The P-Values of all the variables tell us that each of the data points are significant, which means that each of them matter in trying to predict grad school admisssions. For the 'gre' and 'gpa' variables, since their coefficients are postive, it means that they are more likely to get admitted with the higher values there, which seems pretty reasonable. The rank variable tells us that, since it is a negative, that you are less likely to get in to a school if your school you got your undergrad in is a lower tiered school. The estimate being very negative means that there are more people who don't get in to grad school than people that get in.
+The main thing we need to focus on is the 'Estimate' column. Since each of our rows has at least 1 asterik next to it, it means that each of our predictors (GRE Score, GPA, and School Tier) are important in trying to predict whether students get admitted. If you look at the 'Estimate' column, since GRE and GPA are both positive numbers, it means that people are more likely to get admitted with higher GRE or higher GPA, which makes sense. Since the rank estimate is negative, it means that studnet from lower tier schools have a tougher time getting admitted to grad school.
 
 
 
-We can also see how this works with a couple of examples. The first example we will look at is the worst case scenario for getting in. I will use getting a GRE score of 220 and a GPA of 2.26, since those were the minimums from our data, and have them come from a very low tier school.
-```{r}
+
+Let's take a look at how well our model predicted the 400 students from our data set.
+```{r echo = FALSE}
+grad_mod2$LOO$Classification$Table
+```
+We mainly want to be on that diagonal line from top left to bottom right (each one on the diagonal means that we predicted correctly). The ones that are not on the diagonal line are ones we didn't predict right.
+
+```{r echo = FALSE}
+grad_mod2$LOO$Classification$Diagnostic[5:7]
+```
+This shows us our Sensitivity and Specificity, both of which we talked about above. It also shows us our accuracy as well (how often we predicted correctly).
+
+
+
+To get a better idea about how our model can predict, we can try a couple of examples. The first example we will look at is the worst case scenario for getting in. I will use getting a GRE score of 220 and a GPA of 2.26, since those were the minimums from our data, and have them come from a very low tier school.
+```{r echo = FALSE}
 worst.odds = exp(grad_mod2$Model$Model$coefficients%*%c(1, 220, 2.26, 4))
 worst.prob = worst.odds / (1 + worst.odds)
 worst.prob
 ```
-This means that the lowest probability that this model will give us (with still using observations with our data), is a 3% chance of getting in. Not too good.
+This means that the lowest probability that this model will give us (with still using observations with our data), is a 3% chance of getting in.
 
 The best case scenario would be getting a GRE score of 800, a GPA of 4.0 , and coming from a very high tier school.
-```{r}
+```{r echo = FALSE}
 best.odds = exp(grad_mod2$Model$Model$coefficients%*%c(1, 800, 4, 1))
 best.prob = best.odds / (1 + best.odds)
 best.prob
 ```
-This means that the best that this model can predict is that you have a 72% of getting admitted to grad school. I'd expect with perfect GRE and GPA from a great school would let you have a better shot, but I guess not.
+This means that the best that this model can predict is that you have a 72% of getting admitted to grad school.
 
 
 
+To sum up, I think this model can work really well in trying to predict if a student will get in to grad school or not. It seems that all three of these variables really do matter and how much they do end up mattering. You can also see things like that 1 point of your GPA is worth more than going to a school tier lower (A 3.0 at a Tier 1 School has a less of a chance of getting accepted than a 4.0 at a Tier 2 School) or that 1 point of GPA is worth about as much as 340 points on your GRE.

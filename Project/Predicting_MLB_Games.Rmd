@@ -1,0 +1,293 @@
+---
+title: "Predicting MLB Games"
+author: "Francisco Robles"
+date: "April 29, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load Packages, Load Data, and Clean Data
+```{r message = F}
+library(tidyverse)
+library(teamcolors)
+library(zoo)
+library(xts)
+library(forecast)
+library(magrittr)
+```
+
+```{r message = F, warning = F}
+Teams = read_csv('Teams.csv')
+schedule_2018 = read.table('schedule_2018.TXT', sep = ',')
+```
+
+```{r include = F}
+# Cleaning the data that was imported, no need to show
+Teams %>%
+  pull(yearID) %>%
+  paste0('-01-01') %>%
+  as.Date() -> Teams$yearID
+schedule_2018 %>%
+  select(V4, V7) -> schedule_2018
+schedule_2018$V4 = as.character(schedule_2018$V4)
+schedule_2018$V7 = as.character(schedule_2018$V7)
+schedule_2018 = mutate_if(schedule_2018, is.character, str_replace_all, pattern = 'CHN', replacement = 'CHC')
+schedule_2018 = mutate_if(schedule_2018, is.character, str_replace_all, pattern = 'CHA', replacement = 'CHW')
+schedule_2018 = mutate_if(schedule_2018, is.character, str_replace_all, pattern = 'KCA', replacement = 'KCR')
+schedule_2018 = mutate_if(schedule_2018, is.character, str_replace_all, pattern = 'LAN', replacement = 'LAD')
+schedule_2018 = mutate_if(schedule_2018, is.character, str_replace_all, pattern = 'MIA', replacement = 'FLA')
+schedule_2018 = mutate_if(schedule_2018, is.character, str_replace_all, pattern = 'NYN', replacement = 'NYM')
+schedule_2018 = mutate_if(schedule_2018, is.character, str_replace_all, pattern = 'NYA', replacement = 'NYY')
+schedule_2018 = mutate_if(schedule_2018, is.character, str_replace_all, pattern = 'SDN', replacement = 'SDP')
+schedule_2018 = mutate_if(schedule_2018, is.character, str_replace_all, pattern = 'SFN', replacement = 'SFG')
+schedule_2018 = mutate_if(schedule_2018, is.character, str_replace_all, pattern = 'SLN', replacement = 'STL')
+schedule_2018 = mutate_if(schedule_2018, is.character, str_replace_all, pattern = 'TBA', replacement = 'TBD')
+schedule_2018 = mutate_if(schedule_2018, is.character, str_replace_all, pattern = 'WAS', replacement = 'WSN')
+```
+
+
+
+## Prediction Metric
+To predict games, I made the conscious choice to only go back to 1998, which was the last time that the MLB expanded, going from 28 to 30 teams.
+```{r}
+Teams %>%
+  filter(yearID >= as.Date('1998-01-01')) -> Teams
+```
+
+
+
+There are many differenct current predictors to try and predict how a team should have done during a season. Using just the basic Win% (Wins / Total Games) isn't really the best way to show how good a team truly is. If a team is .500, but loses all its games by 10 runs and wins all of its games by only 1 run, then they are most likely just having a some luck to go their way. This is why a better metric is to use Runs & Runs allowed as a metric for success. There are 5 main public ways that people use to try and predict how good a team actually is, all of which use Runs and Runs allowed. I used the 2018 season to see which one was the best at predicting games.
+```{r include = F}
+Teams %>%
+  mutate(actual_win = W / (W + L),
+         pyt_win = R^2 / (R^2 + RA^2),
+         pyt_resid = actual_win - pyt_win,
+         opt_win = R^1.83 / (R^1.83 + RA^1.83),
+         opt_resid = actual_win - opt_win,
+         port_x = 1.5 * log10((R + RA)/G) + 0.45,
+         port_win = R^port_x / (R^port_x + RA^port_x),
+         port_resid = actual_win - port_win,
+         pat_x = ((R + RA)/G)^.287,
+         pat_win = R^pat_x / (R^pat_x + RA^pat_x),
+         pat_resid = actual_win - pat_win,
+         lin_win = 0.000683 * (R - RA) + 0.5,
+         lin_resid = actual_win - lin_win) -> Teams
+```
+
+
+I then found the RMSE of each predictor and compared it to what each team's actual winning percentage was and multiplied it by 162 to see how off the predictors were from how many games the teams actually won
+```{r}
+Teams %>%
+  summarize(pyt_rmse = sqrt(sum((pyt_resid)^2)/629),
+            opt_rmse = sqrt(sum((opt_resid)^2)/629),
+            port_rmse = sqrt(sum((port_resid)^2)/629),
+            pat_rmse = sqrt(sum((pat_resid)^2)/629),
+            lin_rmse = sqrt(sum((lin_resid)^2)/629)) -> rmse
+rmse*162
+```
+All of them were very close to each other, all around 4, so it doesn't seem like any of them are bad, so I decided to just go with the smallest one which was port_win predictor.
+
+
+## Visualization
+
+```{r include = F}
+Teams.Split = Teams %>%
+  group_by(franchID) %>%
+  nest()
+teamcolors %>%
+  filter(league == 'mlb') -> mlb.colors
+rbind.data.frame(mlb.colors[13,], mlb.colors[-13,]) -> mlb.colors
+rbind.data.frame(mlb.colors[1:11,], mlb.colors[15,], mlb.colors[12:14,], mlb.colors[16:30,]) -> mlb.colors
+rbind.data.frame(mlb.colors[1:23,], mlb.colors[25,], mlb.colors[24,], mlb.colors[26:30,]) -> mlb.colors
+c(mlb.colors$primary[1:5], mlb.colors$secondary[6], mlb.colors$primary[7:8], mlb.colors$secondary[9],
+  mlb.colors$primary[10:11], mlb.colors$secondary[12], '#F4911E', mlb.colors$secondary[14],
+  mlb.colors$primary[15], mlb.colors$secondary[16:17], mlb.colors$primary[18:20], mlb.colors$secondary[21],
+  mlb.colors$primary[22], mlb.colors$tertiary[23], mlb.colors$secondary[24], mlb.colors$primary[25:26], 
+  mlb.colors$secondary[27:28], mlb.colors$primary[29:30]) -> mlb.palette
+names(mlb.palette) = sort(unique(Teams.Split$franchID))
+```
+
+
+To try and visualize how the data would look, I tried making a multicolored scatterplot to try and visualize the data, it did not end up too well
+```{r}
+ggplot(Teams, aes(yearID, actual_win, color = franchID)) +
+  geom_line() +
+  scale_color_manual(values = mlb.palette)
+```
+
+
+Yeah, it didn't turn out too pretty. But once you split it apart and only have each individual team on their own plot, it looks somewhat nice
+```{r include=F}
+plot.list = readRDS('plot_list')
+```
+Here's one for the Dodgers for instance.
+```{r}
+plot.list$LAD
+```
+
+
+## Time Series Paramaeter Estimation
+From just looking at that one graph, it is kind of tough to see how we can use our previous data to try and predict. Luckily, there is a time series model called an ARIMA model, that can help us fit a model for us. They depend on three different parameters (AR, I, MA), hence ARIMA. For our case, the I=0. But to find out the AR and MA, there are different ways to try and find what they will be, with an ACF and PACF plot being the most common.
+```{r include = F}
+acf.list = readRDS('acf_list')
+
+unlist(map(acf.list, 1)) -> acf.means
+matrix(acf.means, nrow = 30, ncol = 14, byrow = T) -> acf.means
+acf.means = as.data.frame(acf.means)
+acf.means %>%
+  colMeans() -> acf.means
+acf.means = data.frame(index = 1:14, means = acf.means)
+```
+
+
+So, I ran an ACF for each of the teams and then took the average coefficients at each of the interval to come up with this plot.
+```{r}
+ggplot(acf.means, aes(index, means)) +
+  geom_point() +
+  geom_hline(color = 'red', yintercept = 0) +
+  geom_hline(color = 'blue', yintercept = 0.42) +
+  geom_hline(color = 'blue', yintercept = -0.42)
+```
+The first point doesn't mean much, but we are looking for points that fall outside of the blue bars. No other point does, which isn't a good sign. However, I am going to say that the first one seems close enough and say that it matters. This tells us that there is most likely an AR=1 model
+
+
+```{r include = F}
+pacf.list = readRDS('pacf_list')
+
+unlist(map(pacf.list, 1)) -> pacf.means
+matrix(pacf.means, nrow = 30, ncol = 13, byrow = T) -> pacf.means
+pacf.means = as.data.frame(pacf.means)
+pacf.means %>%
+  colMeans() -> pacf.means
+pacf.means = data.frame(index = 1:13, means = pacf.means)
+```
+The next thing to do is check the PACF. I ran through the same process that I mentioned above for this as well. Here is the result.
+```{r}
+ggplot(pacf.means, aes(index, means)) +
+  geom_point() +
+  geom_hline(color = 'red', yintercept = 0) +
+  geom_hline(color = 'blue', yintercept = 0.42) +
+  geom_hline(color = 'blue', yintercept = -0.42)
+```
+For this case, the first point does matter to us. Again, no point falls outside the blue line range, but I am going to say that it is important, which would tell us that we have a MA=1 process.
+
+
+
+
+
+
+## Time Series Analysis
+```{r include = F}
+arima.list.2017 = readRDS('arima_list_2017')
+map(arima.list.2017, 1)
+map(arima.list.2017, 1) %>%
+  unlist() %>%
+  matrix(nrow = 30, ncol = 3)  %>%
+  colMeans() -> ts.coef.2017
+pred.list.2018 = readRDS('pred_list_2018')
+```
+Since our data seems to suggest an ARIMA(1,0,1) model, I ran one for each of the 30 teams in the MLB from the data from 2017 and before. I then took the mean of each of our 3 coefficients (AR1, MA1, Intercept) and used that as the coefficients of my time series. I then used these values to predict the winning percentages of these teams in 2018. This was my result.
+```{r}
+as.data.frame(pred.list.2018) %>%
+  gather('Team', 'Pred_Win_Pct') %>%
+  arrange(desc(Pred_Win_Pct))
+```
+
+
+## Bradley-Terry Model
+I will be using a model called the Bradley-Terry model to try and predict games. Essentially what it does is you assign each team a talent score and it uses those talent scores to try and predict if a team would win that game or not. The Bradley-Terry model suggests that you have your talents follow a N(0,.2) distribution (0 mean and .2 standard deviation). I converted my predicted winning percentages to have that and this is the result
+```{r include = F}
+pred.list.2018 %>%
+  unlist() -> pred.win.2018
+talent.2018 = scale(pred.win.2018) / 5
+talent.2018 = as.vector(talent.2018)
+names(talent.2018) = unique(Teams.Split$franchID)
+```
+```{r}
+talent.2018
+```
+
+
+```{r include = F}
+# Combining the schedule with the talents of each of the two teams
+talent.2018 = data.frame(names(talent.2018), talent.2018)
+colnames(talent.2018) = c('Team', 'Talent')
+talent.2018$Team = as.character(talent.2018$Team)
+rownames(talent.2018) = NULL
+colnames(schedule_2018) = c('Away_Team', 'Home_Team')
+talent.matrix.2018 = left_join(schedule_2018, talent.2018, by = c('Away_Team' = 'Team'))
+talent.matrix.2018 = left_join(talent.matrix.2018, talent.2018, by = c('Home_Team' = 'Team'))
+colnames(talent.matrix.2018) = c('Away_Team', 'Home_Team', 'Away_Talent', 'Home_Talent')
+talent.matrix.2018 %>%
+  mutate(Prob_Away = exp(Away_Talent) / (exp(Away_Talent) + exp(Home_Talent))) -> talent.matrix.2018
+```
+
+
+I wrote a function that will simulate the entire regular season and playoffs for the season. I ran this simulation 10,000 times to make sure my results weren't flukey
+```{r}
+results.list = readRDS('results_list')
+```
+
+
+## Analysis of Prediction
+I am going to use RMSE to see how well my prediction did for this as well. I will take the average amount of games each of the teams won over the 10,000 simulations and use that as my prediction for the 2018 season.
+```{r include = F}
+wins.df = readRDS('wins_df')
+wins.df %>%
+  select(c(1, 3:ncol(wins.df))) %>%
+  gather(key = 'Year', value = 'Win_Pct', -c('Team')) %>%
+  group_by(Team) %>%
+  summarize(Avg.Win = mean(Win_Pct)) -> pred.wins
+colnames(wins.df)[2] = 'Actual_Pct'
+left_join(wins.df[,1:2], pred.wins, by = 'Team') %>%
+  select(Actual_Pct,Avg.Win) -> resid.df
+```
+```{r}
+sim.rmse = sqrt(sum((resid.df$Actual_Pct - resid.df$Avg.Win)^2)/30)
+sim.rmse * 162
+```
+That is really, really bad. I'm essentially 11 games off on average.
+
+
+## What went wrong?
+While you can never say with 100% certainty what went wrong, I do have some ideas for why my predictions were so bad.
+
+1. The ARIMA(1,0,1) model
+    + Chose this from a big generalization of all 30 MLB teams
+    + Each team could have had it's own unique model and using those might be better
+2. New Players and Players that left
+    + Players that were traded for, signed in FA, new prospects would help a team win more than they were predicted and vice versa.
+3. Constant season talent
+    + Teams talent goes up and down at different points of the season do to current injured players and other things. This model does not account for that.
+4. Progression of Players that stay on roster
+    + Older teams will more naturally go down, while younger teams will get better. Win % doesn't account for this.
+
+
+
+## World Series Winners
+Just for an interesting look, I decided to see how many times each team won the World Series in the 10,000 simulations.
+```{r}
+results.list %>%
+  map(5) %>%
+  map(2) %>%
+  map(1) %>%
+  unlist() %>%
+  data.frame() -> ws.winners
+colnames(ws.winners) = 'Winners'
+ws.winners %>%
+  group_by(Winners) %>%
+  summarize(Titles = n()) %>%
+  arrange(desc(Titles))
+```
+The actual winners, The Boston Red Sox, were predicted to win 361 of the 10,000 times. There are however, 2 teams that did not win the World Series at all in the 10,000 simulations.
+```{r}
+Teams.Split[!(Teams.Split$franchID %in% ws.winners$Winners),1]
+```
+
+
+
+
+
